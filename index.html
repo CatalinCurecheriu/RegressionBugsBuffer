@@ -6,60 +6,51 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
+      padding: 10px;
       max-width: 600px;
       margin: auto;
     }
     h1 {
       text-align: center;
-      margin-bottom: 30px;
-      font-size: 1.6em;
+      margin-bottom: 15px;
+      font-size: 1.4em;
     }
     .team {
-      margin-bottom: 40px;
+      margin-bottom: 20px;
     }
     .team-label {
       font-weight: bold;
-      font-size: 1.1em;
-      margin-bottom: 6px;
+      font-size: 1.05em;
+      margin-bottom: 4px;
     }
     input[type="range"] {
       -webkit-appearance: none;
       width: 100%;
-      height: 16px;
-      border-radius: 8px;
+      height: 12px;
+      border-radius: 6px;
       background: #ccc;
       outline: none;
       transition: background 0.2s;
     }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 28px;
-      height: 28px;
+    input[type="range"]::-webkit-slider-thumb,
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: #fff;
       border: 2px solid #888;
       cursor: pointer;
       margin-top: -6px;
-      transition: box-shadow 0.2s;
     }
-    input[type="range"]:hover::-webkit-slider-thumb,
-    input[type="range"]:focus::-webkit-slider-thumb {
-      box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    .capacity-text {
+      margin-top: 3px;
+      font-size: 0.88em;
+      font-style: italic;
     }
-    input[type="range"]::-moz-range-thumb {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #fff;
-      border: 2px solid #888;
-    }
-    .capacity-text { margin-top: 6px; font-size: 0.95em; font-style: italic; }
-    .ticks { display: flex; justify-content: space-between; font-size: 0.8em; margin-top: 4px; color: #555; }
   </style>
 </head>
 <body>
-  <h1>Regression Bug Buffer – Team Capacity Overview</h1>
+  <h1>Regression Bug Buffer</h1>
   <div id="teams-container"></div>
 
   <script>
@@ -79,44 +70,30 @@
       slider.type = 'range';
       slider.min = 0;
       slider.max = 100;
-      slider.setAttribute('aria-label', `Capacity slider for team ${name}`);
+      slider.setAttribute('aria-label', name);
       slider.value = localStorage.getItem(`cap-${name}`) || 0;
       wrapper.appendChild(slider);
 
-      const ticks = document.createElement('div');
-      ticks.className = 'ticks';
-      ticks.innerHTML = '<span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>';
-      wrapper.appendChild(ticks);
-
       const capacity = document.createElement('div');
       capacity.className = 'capacity-text';
-      capacity.setAttribute('aria-live', 'polite');
       wrapper.appendChild(capacity);
 
       function updateUI() {
-        const val = +slider.value;
-
+        const v = +slider.value;
         let color;
-        if (val <= 50) color = `rgb(0, ${200 + val}, 0)`;
-        else if (val <= 75) {
-          const t = (val - 50) / 25;
-          color = `rgb(${t * 255}, ${200 - t * 100}, 0)`;
-        } else {
-          const t = (val - 75) / 25;
-          color = `rgb(255, ${100 - t * 100}, 0)`;
-        }
-        slider.style.background = `linear-gradient(to right, ${color} ${val}%, #ccc ${val}%)`;
+        if (v <= 50) color = `rgb(0,${200 + v},0)`;
+        else if (v <= 75) { const t=(v-50)/25; color=`rgb(${t*255},${200-t*100},0)`; }
+        else { const t=(v-75)/25; color=`rgb(255,${100-t*100},0)`; }
+        slider.style.background = `linear-gradient(to right, ${color} ${v}%, #ccc ${v}%)`;
 
-        let text;
-        if (val === 0) text = 'Capacity: 3+ bugs';
-        else if (val === 100) text = 'Capacity: 0 bugs';
-        else if (val >= 89) text = 'Capacity: 0–1 bug';
-        else if (val >= 75) text = 'Capacity: 1 bug';
-        else if (val >= 50) text = 'Capacity: 1–2 bugs';
-        else text = 'Capacity: 2–3 bugs';
-        capacity.textContent = text;
-
-        slider.setAttribute('aria-valuenow', val);
+        capacity.textContent = 
+          v === 0 ? 'Capacity: 3+ bugs' :
+          v === 100 ? 'Capacity: 0 bugs' :
+          v >= 89 ? 'Capacity: 0–1 bug' :
+          v >= 75 ? 'Capacity: 1 bug' :
+          v >= 50 ? 'Capacity: 1–2 bugs' :
+          'Capacity: 2–3 bugs';
+        slider.setAttribute('aria-valuenow', v);
       }
 
       slider.addEventListener('input', () => {
@@ -125,6 +102,7 @@
       });
 
       updateUI();
+      wrapper.appendChild(capacity);
       container.appendChild(wrapper);
     });
   </script>
