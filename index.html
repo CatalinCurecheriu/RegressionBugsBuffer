@@ -6,51 +6,52 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 10px;
+      padding: 20px;
       max-width: 600px;
       margin: auto;
     }
     h1 {
       text-align: center;
-      margin-bottom: 15px;
-      font-size: 1.4em;
+      margin-bottom: 30px;
+      font-size: 1.6em;
     }
     .team {
-      margin-bottom: 20px;
+      margin-bottom: 40px;
     }
     .team-label {
       font-weight: bold;
-      font-size: 1.05em;
-      margin-bottom: 4px;
+      font-size: 1.1em;
+      margin-bottom: 6px;
     }
     input[type="range"] {
       -webkit-appearance: none;
       width: 100%;
-      height: 12px;
-      border-radius: 6px;
+      height: 16px;
+      border-radius: 8px;
       background: #ccc;
       outline: none;
       transition: background 0.2s;
     }
-    input[type="range"]::-webkit-slider-thumb,
-    input[type="range"]::-moz-range-thumb {
-      width: 24px;
-      height: 24px;
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background: #fff;
       border: 2px solid #888;
       cursor: pointer;
       margin-top: -6px;
+      transition: box-shadow 0.2s;
     }
     .capacity-text {
-      margin-top: 3px;
-      font-size: 0.88em;
+      margin-top: 6px;
+      font-size: 0.95em;
       font-style: italic;
     }
   </style>
 </head>
 <body>
-  <h1>Regression Bug Buffer</h1>
+  <h1>Regression Bug Buffer – Team Capacity Overview</h1>
   <div id="teams-container"></div>
 
   <script>
@@ -60,50 +61,96 @@
     teams.forEach(name => {
       const wrapper = document.createElement('div');
       wrapper.className = 'team';
-
       const label = document.createElement('div');
       label.className = 'team-label';
       label.textContent = name;
       wrapper.appendChild(label);
-
       const slider = document.createElement('input');
       slider.type = 'range';
       slider.min = 0;
       slider.max = 100;
-      slider.setAttribute('aria-label', name);
-      slider.value = localStorage.getItem(`cap-${name}`) || 0;
+      slider.dataset.team = name;
       wrapper.appendChild(slider);
-
       const capacity = document.createElement('div');
       capacity.className = 'capacity-text';
       wrapper.appendChild(capacity);
 
-      function updateUI() {
-        const v = +slider.value;
+      function updateUI(val) {
         let color;
-        if (v <= 50) color = `rgb(0,${200 + v},0)`;
-        else if (v <= 75) { const t=(v-50)/25; color=`rgb(${t*255},${200-t*100},0)`; }
-        else { const t=(v-75)/25; color=`rgb(255,${100-t*100},0)`; }
-        slider.style.background = `linear-gradient(to right, ${color} ${v}%, #ccc ${v}%)`;
+        if (val <= 50) color = `rgb(0,${200 + val},0)`;
+        else if (val <= 75) {
+          const t = (val - 50) / 25;
+          color = `rgb(${t * 255}, ${200 - t * 100}, 0)`;
+        } else {
+          const t = (val - 75) / 25;
+          color = `rgb(255,${100 - t * 100},0)`;
+        }
+        slider.style.background = `linear-gradient(to right, ${color} ${val}%, #ccc ${val}%)`;
 
-        capacity.textContent = 
-          v === 0 ? 'Capacity: 3+ bugs' :
-          v === 100 ? 'Capacity: 0 bugs' :
-          v >= 89 ? 'Capacity: 0–1 bug' :
-          v >= 75 ? 'Capacity: 1 bug' :
-          v >= 50 ? 'Capacity: 1–2 bugs' :
-          'Capacity: 2–3 bugs';
-        slider.setAttribute('aria-valuenow', v);
+        let text;
+        if (val === 0) text = 'Capacity: 3+ bugs';
+        else if (val === 100) text = 'Capacity: 0 bugs';
+        else if (val >= 89) text = 'Capacity: 0–1 bug';
+        else if (val >= 75) text = 'Capacity: 1 bug';
+        else if (val >= 50) text = 'Capacity: 1–2 bugs';
+        else text = 'Capacity: 2–3 bugs';
+
+        capacity.textContent = text;
       }
 
-      slider.addEventListener('input', () => {
-        localStorage.setItem(`cap-${name}`, slider.value);
-        updateUI();
-      });
-
-      updateUI();
-      wrapper.appendChild(capacity);
+      slider.addEventListener('input', () => updateUI(+slider.value));
+      updateUI(0);
       container.appendChild(wrapper);
+    });
+  </script>
+
+  <!-- Supabase + Real-time script -->
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+    const supabase = createClient(
+      'https://kuqykzmhwvbbeqxzjrao.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1cXlrem1od3ZiYmVxeHpqcmFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzMzU2NDksImV4cCI6MjA2NTkxMTY0OX0.phbGA80EwfpYwPHqt-JvHCaelp2yEGBZ304zUa1PBis'
+    );
+
+    async function loadAll() {
+      const { data, error } = await supabase
+        .from('team_capacity')
+        .select('*');
+      if (error) return console.error(error);
+      data.forEach(({ team, value }) => {
+        const slider = document.querySelector(`input[data-team="${team}"]`);
+        slider.value = value;
+        slider.dispatchEvent(new Event('input'));
+      });
+    }
+
+    supabase
+      .channel('team_capacity_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'team_capacity'
+      }, payload => {
+        const { team, value } = payload.new;
+        const slider = document.querySelector(`input[data-team="${team}"]`);
+        if (slider && +slider.value !== value) {
+          slider.value = value;
+          slider.dispatchEvent(new Event('input'));
+        }
+      })
+      .subscribe();
+
+    loadAll();
+
+    document.querySelectorAll('input[type=range]').forEach(slider => {
+      slider.addEventListener('input', async () => {
+        const team = slider.dataset.team;
+        const value = +slider.value;
+        const now = new Date().toISOString();
+        await supabase
+          .from('team_capacity')
+          .upsert({ team, value, updated_at: now }) // primary key `team` is required :contentReference[oaicite:1]{index=1}
+      });
     });
   </script>
 </body>
