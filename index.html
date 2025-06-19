@@ -1,39 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><title>Regression Bug Buffer – Team Capacity Overview</title>
-<style>
-  body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:auto}
-  h1{text-align:center;margin-bottom:30px;font-size:1.6em}
-  .team{margin-bottom:40px}
-  .team-label{font-weight:bold;font-size:1.1em;margin-bottom:6px}
-  input[type=range]{-webkit-appearance:none;width:100%;height:16px;border-radius:8px;background:#ccc;outline:none}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid #888;cursor:pointer}
-  .capacity-text{margin-top:6px;font-size:0.95em;font-style:italic}
-</style>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Regression Bug Buffer – Team Capacity Overview</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 10px; max-width: 600px; margin: auto }
+    h1 { text-align: center; margin-bottom: 15px; font-size: 1.4em }
+    .team { margin-bottom: 20px }
+    .team-label { font-weight: bold; font-size: 1.05em; margin-bottom: 4px }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 12px;
+      border-radius: 6px;
+      background: #ccc;
+      outline: none;
+      transition: background 0.2s;
+    }
+    input[type="range"]::-webkit-slider-thumb,
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #888;
+      cursor: pointer;
+      margin-top: -6px;
+    }
+    .capacity-text {
+      margin-top: 3px;
+      font-size: 0.88em;
+      font-style: italic;
+    }
+  </style>
 </head>
 <body>
-  <h1>Regression Bug Buffer – Team Capacity Overview</h1>
+  <h1>Regression Bug Buffer</h1>
   <div id="teams-container"></div>
 
   <script>
     const teams = ['Pegasus','Phoenix','Rainbow','Sparkle','Nexus'];
     const container = document.getElementById('teams-container');
 
-    function updateUI(slider, val) {
+    function updateUI(slider, v) {
       let color;
-      if     (val <= 50) color = `rgb(0,${200+val},0)`;
-      else if(val <= 75){const t=(val-50)/25; color=`rgb(${t*255},${200-t*100},0)`;}
-      else               {const t=(val-75)/25; color=`rgb(255,${100-t*100},0)`;}
-      slider.style.background = `linear-gradient(to right, ${color} ${val}%, #ccc ${val}%)`;
+      if     (v <= 50) color = `rgb(0,${200+v},0)`;
+      else if(v <= 75){ const t=(v-50)/25; color=`rgb(${t*255},${200-t*100},0)`; }
+      else             { const t=(v-75)/25; color=`rgb(255,${100-t*100},0)`; }
+
+      slider.style.background = `linear-gradient(to right, ${color} ${v}%, #ccc ${v}%)`;
 
       const cap = slider.nextElementSibling;
-      let text = val===0 ? 'Capacity: 3+ bugs'
-               : val===100 ? 'Capacity: 0 bugs'
-               : val>=89 ? 'Capacity: 0–1 bug'
-               : val>=75 ? 'Capacity: 1 bug'
-               : val>=50 ? 'Capacity: 1–2 bugs'
-               : 'Capacity: 2–3 bugs';
-      cap.textContent = text;
+      cap.textContent = 
+        v === 0 ? 'Capacity: 3+ bugs' :
+        v === 100 ? 'Capacity: 0 bugs' :
+        v >= 89 ? 'Capacity: 0–1 bug' :
+        v >= 75 ? 'Capacity: 1 bug' :
+        v >= 50 ? 'Capacity: 1–2 bugs' :
+        'Capacity: 2–3 bugs';
     }
 
     teams.forEach(name => {
@@ -57,17 +81,17 @@
       'YOUR_ANON_KEY'
     );
 
-    const lastUpdate = {};
+    const last = {};
 
     async function loadAll() {
       const { data, error } = await supabase.from('team_capacity').select('*');
       if (error) return console.error(error);
       data.forEach(({team,value}) => {
-        const slider = document.querySelector(`input[data-team="${team}"]`);
-        if (slider) {
-          slider.value = value;
-          updateUI(slider, value);
-          lastUpdate[team] = value;
+        const s = document.querySelector(`input[data-team="${team}"]`);
+        if (s) {
+          s.value = value;
+          updateUI(s, value);
+          last[team] = value;
         }
       });
     }
@@ -75,11 +99,11 @@
     supabase
       .channel('team-capacity-changes')
       .on('postgres_changes', {event:'UPDATE',schema:'public',table:'team_capacity'}, ({new: p}) => {
-        const slider = document.querySelector(`input[data-team="${p.team}"]`);
-        if (slider && +slider.value !== p.value) {
-          slider.value = p.value;
-          updateUI(slider, p.value);
-          lastUpdate[p.team] = p.value;
+        const s = document.querySelector(`input[data-team="${p.team}"]`);
+        if (s && +s.value !== p.value) {
+          s.value = p.value;
+          updateUI(s, p.value);
+          last[p.team] = p.value;
         }
       })
       .subscribe();
@@ -89,9 +113,11 @@
     document.querySelectorAll('input[type=range]').forEach(slider => {
       slider.addEventListener('input', async () => {
         const team = slider.dataset.team, val = +slider.value;
-        if (lastUpdate[team] === val) return;
-        await supabase.from('team_capacity').upsert({ team, value: val, updated_at: new Date().toISOString() });
-        lastUpdate[team] = val;
+        if (last[team] === val) return;
+        await supabase.from('team_capacity').upsert({
+          team, value: val, updated_at: new Date().toISOString()
+        });
+        last[team] = val;
       });
     });
   </script>
