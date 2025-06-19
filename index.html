@@ -61,33 +61,25 @@
     teams.forEach(name => {
       const wrapper = document.createElement('div');
       wrapper.className = 'team';
-      const label = document.createElement('div');
-      label.className = 'team-label';
-      label.textContent = name;
-      wrapper.appendChild(label);
-
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = 0;
-      slider.max = 100;
-      slider.dataset.team = name; // << Ecco il data attribute
-      wrapper.appendChild(slider);
-
-      const capacity = document.createElement('div');
-      capacity.className = 'capacity-text';
-      wrapper.appendChild(capacity);
+      wrapper.innerHTML = `
+        <div class="team-label">${name}</div>
+        <input type="range" min="0" max="100" data-team="${name}">
+        <div class="capacity-text">Capacity: 3+ bugs</div>
+      `;
+      const slider = wrapper.querySelector('input');
+      const capacity = wrapper.querySelector('.capacity-text');
 
       function updateUI(val) {
         let color;
-        if (val <= 50) color = `rgb(0,${200 + val},0)`;
+        if (val <= 50) color = \`rgb(0,\${200 + val},0)\`;
         else if (val <= 75) {
           const t = (val - 50) / 25;
-          color = `rgb(${t * 255}, ${200 - t * 100}, 0)`;
+          color = \`rgb(\${t * 255}, \${200 - t * 100}, 0)\`;
         } else {
           const t = (val - 75) / 25;
-          color = `rgb(255,${100 - t * 100},0)`;
+          color = \`rgb(255,\${100 - t * 100},0)\`;
         }
-        slider.style.background = `linear-gradient(to right, ${color} ${val}%, #ccc ${val}%)`;
+        slider.style.background = \`linear-gradient(to right, \${color} \${val}%, #ccc \${val}%)\`;
 
         let text;
         if (val === 0) text = 'Capacity: 3+ bugs';
@@ -106,56 +98,44 @@
     });
   </script>
 
-  <!-- Supabase + Real-time script -->
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
     const supabase = createClient(
       'https://kuqykzmhwvbbeqxzjrao.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1cXlrem1od3ZiYmVxeHpqcmFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzMzU2NDksImV4cCI6MjA2NTkxMTY0OX0.phbGA80EwfpYwPHqt-JvHCaelp2yEGBZ304zUa1PBis'
     );
 
-    // Carica i valori attuali dalla tabella
     async function loadAll() {
-      const { data, error } = await supabase
-        .from('team_capacity')
-        .select('*');
+      const { data, error } = await supabase.from('team_capacity').select('*');
       if (error) return console.error(error);
       data.forEach(({ team, value }) => {
-        const slider = document.querySelector(`input[data-team="${team}"]`);
+        const slider = document.querySelector(\`input[data-team="\${team}"]\`);
         slider.value = value;
-        slider.dispatchEvent(new Event('input'));
+        updateUI.call({slider}, value); // Aggiorna solo la UI
       });
     }
 
-    // Ascolta eventi realtime
     supabase
       .channel('team_capacity_changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'team_capacity'
-      }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_capacity' }, payload => {
         const { team, value } = payload.new;
-        const slider = document.querySelector(`input[data-team="${team}"]`);
+        const slider = document.querySelector(\`input[data-team="\${team}"]\`);
         if (slider && +slider.value !== value) {
           slider.value = value;
-          slider.dispatchEvent(new Event('input'));
+          updateUI.call({slider}, value);
         }
       })
       .subscribe();
 
     loadAll();
 
-    // Quando l'utente modifica una barra
     document.querySelectorAll('input[type=range]').forEach(slider => {
       slider.addEventListener('input', async () => {
-        const team = slider.dataset.team;
-        const value = +slider.value;
-        const now = new Date().toISOString();
-        await supabase
-          .from('team_capacity')
-          .upsert({ team, value, updated_at: now });
+        await supabase.from('team_capacity').upsert({
+          team: slider.dataset.team,
+          value: +slider.value,
+          updated_at: new Date().toISOString()
+        });
       });
     });
   </script>
